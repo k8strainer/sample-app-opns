@@ -153,8 +153,6 @@ metadata:
   annotations:
     haproxy.router.openshift.io/balance: "random"
     haproxy.router.openshift.io/disable_cookies: "true"
-    ### exclude from sync as Argo-Sync this overrides automatic route-plugin-weighting 
-    argocd.argoproj.io/compare-options: IgnoreExtraneous
   labels:
     app: sample-app
   namespace: sample-app
