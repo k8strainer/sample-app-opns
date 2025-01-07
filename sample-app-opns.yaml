@@ -1,0 +1,195 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: sample-app
+  namespace: sample-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sample-app
+  template:
+    metadata:
+      labels:
+        app: sample-app
+    spec:
+      containers:
+      - name: sample-app
+        image: gcr.io/cluster-01-271319/sample-app-opns:1.0.0
+        imagePullPolicy: Always
+        #image: gcr.io/cluster-01-271319/sample-app-opns:2.0.0
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9090
+          name: metrics
+
+  strategy:
+    canary:
+      analysis:
+        startingStep: 2
+        templates:
+        - templateName: sample-app
+      canaryMetadata:
+        labels:
+          deployment: canary
+      canaryService: sample-app-canary
+      stableMetadata:
+        labels:
+          deployment: stable
+      stableService: sample-app-stable
+      steps:
+      - setWeight: 25
+      - pause: {}
+      - setWeight: 50
+      - pause:
+          duration: 3m
+      - setWeight: 75
+      - pause:
+          duration: 3m
+      trafficRouting:
+        plugins:
+          argoproj-labs/openshift:
+            routes:
+            - sample-app-route
+
+---
+
+
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: sample-app
+  namespace: sample-app
+spec:
+  args:
+  - name: bearer-token
+    valueFrom:
+      secretKeyRef:
+        name: sample-app-admin-secret
+        key: bearerToken
+  metrics:
+  # check request count
+  - name: total-requests-check
+    interval: 1m
+    failureLimit: 1
+    provider:
+      prometheus:
+        address: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+        insecure: true  # Avoid TLS handshake errors
+        headers:
+        - key: Authorization
+          value: "Bearer {{ args.bearer-token }}"
+        query: |
+          sum(increase(
+            sample_app_http_requests_total{service="sample-app-canary", status="200"}[1m])
+          )
+    successCondition: len(result) > 0 && result[0] >= 20
+
+  # check request duration
+  - name: request-duration-check
+    interval: 1m
+    failureLimit: 1
+    provider:
+      prometheus:
+        address: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+        insecure: true
+        headers:
+        - key: Authorization
+          value: "Bearer {{ args.bearer-token }}"
+        query: |
+          1000 * (
+            sum(increase(sample_app_http_request_duration_seconds_sum{service="sample-app-canary",status="200"}[1m]))
+            /
+            sum(increase(sample_app_http_request_duration_seconds_count{service="sample-app-canary",status="200"}[1m]))
+          )
+    #(* 1000 zur umrechnung in Milisekunden)
+    # Succeeds wenn der Durchschnitt <= 0.010 Sek. (10 ms) war
+    successCondition: len(result) > 0 && result[0] <= 0.010
+
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app-stable
+  namespace: sample-app
+  labels:
+    app: sample-app
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+  selector:
+    app: sample-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app-canary
+  namespace: sample-app
+  labels:
+    app: sample-app
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+  selector:
+    app: sample-app
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: sample-app-route
+  annotations:
+    haproxy.router.openshift.io/balance: "random"
+    haproxy.router.openshift.io/disable_cookies: "true"
+  labels:
+    app: sample-app
+  namespace: sample-app
+spec:
+  port:
+    targetPort: http
+#  tls:
+#    insecureEdgeTerminationPolicy: Redirect
+#    termination: edge
+  to:
+    kind: Service
+    name: sample-app-stable
+    weight: 100
+
+  alternateBackends:
+    - kind: Service
+      name: sample-app-canary
+      weight: 0
+
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sample-app
+  namespace: sample-app
+  labels:
+    app: sample-app
+spec:
+  selector:
+    matchLabels:
+      app: sample-app
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 10s
+  namespaceSelector:
+    matchNames:
+    - sample-app
+

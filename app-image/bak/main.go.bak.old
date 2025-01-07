@@ -1,0 +1,62 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+// Metrics
+var (
+	sampleAppRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "sample_app_http_requests_total",
+			Help: "Total number of HTTP requests received by the Sample App.",
+		},
+		[]string{"method", "endpoint"},
+	)
+	sampleAppRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "sample_app_http_request_duration_seconds",
+			Help:    "Duration of HTTP requests to the Sample App in seconds.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "endpoint"},
+	)
+)
+
+func init() {
+	// Register metrics
+	prometheus.MustRegister(sampleAppRequestsTotal)
+	prometheus.MustRegister(sampleAppRequestDuration)
+}
+
+func main() {
+	version := "1.0.0"
+
+	// Serve application on 8080
+	go func() {
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			fmt.Fprintf(w, "<html><body><h1>Sample App</h1><p>Version: %s</p></body></html>", version)
+			duration := time.Since(start).Seconds()
+
+			// Record metrics
+			sampleAppRequestsTotal.WithLabelValues(r.Method, "/").Inc()
+			sampleAppRequestDuration.WithLabelValues(r.Method, "/").Observe(duration)
+		})
+
+		log.Println("Starting application server on :8080")
+		log.Fatal(http.ListenAndServe(":8080", nil))
+	}()
+
+	// Serve metrics on 9090
+	http.Handle("/metrics", promhttp.Handler())
+	log.Println("Starting metrics server on :9090")
+	log.Fatal(http.ListenAndServe(":9090", nil))
+}
+
