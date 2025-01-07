@@ -1,0 +1,35 @@
+#apiVersion: v1
+#kind: Namespace
+#metadata:
+#  name: sample-app
+#  # the following annotation will be needed when using argoCD with Operator
+#  labels:
+#    argocd.argoproj.io/managed-by: argocd
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-app-argo 
+  namespace: openshift-gitops
+spec:
+  destination:
+    namespace: sample-app
+    server: https://kubernetes.default.svc
+  project: default
+  # change Project to 'group' Apps and apply specific settings
+  # according to sourceRepos, destination-Namespaces and -Servers etc.
+  #project: appproject-testing
+  source:
+    repoURL: https://github.com/k8strainer/sample-app-opns.git
+    targetRevision: main
+    path: k8s
+  syncPolicy:
+    automated:
+      # prune resources in live cluster if not available any more in Git
+      prune: true
+      # By default, changes that are made to the live cluster will not trigger automated sync. 
+      # To enable automatic sync when the live cluster's state deviates from the state defined in Git, run: 
+      selfHeal: true
+    # sync retry  
+    retry:
+      limit: 5
