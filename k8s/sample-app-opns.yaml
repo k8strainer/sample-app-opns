@@ -153,6 +153,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/balance: "random"
     haproxy.router.openshift.io/disable_cookies: "true"
+    argocd.argoproj.io/sync-wave: "1" 
   labels:
     app: sample-app
   namespace: sample-app
@@ -181,6 +182,8 @@ metadata:
   namespace: sample-app
   labels:
     app: sample-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" 
 spec:
   selector:
     matchLabels:
