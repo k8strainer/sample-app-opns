@@ -1,3 +1,4 @@
+# enable Rollouts UI in ArgoCD CR
 spec:
   server:
     enableRolloutsUI: true
