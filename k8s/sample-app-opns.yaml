@@ -105,7 +105,8 @@ spec:
           )
     #(* 1000 zur umrechnung in Milisekunden)
     # Succeeds wenn der Durchschnitt <= 0.010 Sek. (10 ms) war
-    successCondition: len(result) > 0 && result[0] <= 0.010
+    #successCondition: len(result) > 0 && result[0] <= 0.010
+    successCondition: len(result) > 0 && result[0] <= 10
 
 
 
