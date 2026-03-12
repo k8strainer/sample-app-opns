@@ -17,9 +17,9 @@ spec:
     spec:
       containers:
       - name: sample-app
-        image: gcr.io/cluster-01-290863/sample-app-opns:1.0.0
+        #image: gcr.io/cluster-01-290863/sample-app-opns:1.0.0
         imagePullPolicy: Always
-        #image: gcr.io/cluster-01-290863/sample-app-opns:2.0.0
+        image: gcr.io/cluster-01-290863/sample-app-opns:2.0.0
         ports:
         - containerPort: 8080
           name: http
